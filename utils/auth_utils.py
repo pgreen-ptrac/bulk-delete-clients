@@ -4,7 +4,7 @@ import time
 
 import utils.log_handler as logger
 log = logger.log
-from api import *
+import api
 import utils.input_utils as input
 
 class Auth():
@@ -53,7 +53,7 @@ class Auth():
 
         #validate
         try:
-            response = api.auth.root(self.base_url, {}) # non authenticated endpoint - does not require any headers - used to see if we can connect to the api
+            response = api._v1.authentication.root_request(self.base_url, {}) # non authenticated endpoint - does not require any headers - used to see if we can connect to the api
             log.debug(response)
             if response.get("statusCode") != None: # when the response is non 200, response can still be read as json payload
                 if input.retry("Could not validate URL. Either the API is offline or it was entered incorrectly\nExample: https://company.plextrac.com"):
@@ -92,7 +92,7 @@ class Auth():
         else:
             log.info(f'Using cf_token from config...')
 
-        response = api.auth.root(self.base_url, headers={"cf-access-token": self.cf_token})
+        response = api._v1.authentication.root_request(self.base_url, headers={"cf-access-token": self.cf_token})
             
         try:
             response_json = json.loads(response.text)
@@ -126,7 +126,7 @@ class Auth():
             "password": self.password
         }
         
-        response = api.auth.authenticate(self.base_url, self.auth_headers, authenticate_data)
+        response = api._v1.authentication.authentication(self.base_url, self.auth_headers, authenticate_data)
         
         # the following conditional can fail due to:
         # - invalid credentials
@@ -150,7 +150,7 @@ class Auth():
                 "token": input.prompt_user("Please enter your 6 digit MFA code")
             }
             
-            response = api.auth.mfa_authenticate(self.base_url, self.auth_headers, mfa_auth_data)
+            response = api._v1.authentication.multi_factor_authentication(self.base_url, self.auth_headers, mfa_auth_data)
             if response.get('status') != "success":
                 if input.retry("Invalid MFA Code."):
                     return self.handle_authentication()

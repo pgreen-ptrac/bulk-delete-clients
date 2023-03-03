@@ -1,10 +1,92 @@
 import yaml
+from copy import deepcopy
+import time
 
 import settings
 import utils.log_handler as logger
 log = logger.log
 from utils.auth_utils import Auth
 import utils.input_utils as input
+import utils.general_utils as utils
+import api
+
+
+def input_tag_additional_tags(tags: list) -> None:
+    if input.user_options(f'Would you like to add another tag?', f'Invalid option', ["y", "n"]) != "y":
+        return None
+    
+    tag = input.prompt_user("Please enter a tag")
+    clean_tag = utils.format_key(tag)
+    if tag != clean_tag:
+        if input.continue_anyways(f'You might have enter an invalid tag string. \'{tag}\' is ideally formatted \'{clean_tag}\''):
+            tags.append(tag)
+            log.info(f'Current tags: {tags}')
+        else:
+            log.info(f'Skipping tag \'{tag}\'')
+            log.info(f'Current tags: {tags}')
+
+    input_tag_additional_tags(tags)
+    return None
+
+
+def get_page_of_clients(page: int, clients: list = [], total_clients: int = -1) -> None:
+    payload = {
+        "pagination": {
+            "offset": page*100,
+            "limit": 100
+        }
+    }
+    response = api._v2.clients.list_clients(auth.base_url, auth.get_auth_headers(), payload)
+    if response['status'] != "success":
+        log.critical(f'Could not retrieve clients from instance. Exiting...')
+        exit()
+    if len(response['data']) > 0:
+        clients += deepcopy(response['data'])
+        total_clients = response['meta']['pagination']['total']
+
+    if len(clients) != total_clients:
+        return get_page_of_clients(page+1, clients, total_clients)
+    
+    return None
+    
+
+# shape of client object
+# {
+#     "client_id": 1963,
+#     "name": "Evidence Test",
+#     "tags": [
+#         "test"
+#     ]
+# }
+def filter_mode_1(client: object) -> bool:
+    """
+    Mode 1: Delete all clients that contain at least one of the selected tags
+
+    Returns a boolean whether the client passed in should be included in the list of clietns to delete based on the client tags and the delete mode
+    """
+    global tags
+    delete_client = False
+    for tag in tags:
+        if tag in client.get('tags', []):
+            delete_client = True
+
+    return delete_client
+    
+
+def filter_mode_2(client: object) -> bool:
+    """
+    Mode 2: Delete all clients that contain all of the selected tags
+
+    Returns a boolean whether the client passed in should be included in the list of clietns to delete based on the client tags and the delete mode
+    """
+    global tags
+    delete_client = True
+    for tag in tags:
+        if tag not in client.get('tags', []):
+            delete_client = False
+
+    return delete_client
+
 
 
 if __name__ == '__main__':
@@ -14,94 +96,72 @@ if __name__ == '__main__':
     with open("config.yaml", 'r') as f:
         args = yaml.safe_load(f)
 
-
-    """
-    Authenticate to Plextrac Instance
-
-    Creates auth object to handle authentication, initializes with values in config
-    Tries to authenticate, will use values stored or prompt the user if needed
-    """
     auth = Auth(args)
     auth.handle_authentication()
 
+    # select tags to filter clients by
+    tags = []
 
-    """
-    Using Authentication
+    print("")
+    print(f'This script will delete clients based on certain client tags. You can select 1 or multiple tags. You can then run the script in 1 of 2 modes.')
+    print(f'Mode 1: Delete all clients that contain at least one of the selected tags')
+    print(f'Mode 2: Delete all clients that contain all of the selected tags')
+    tag = input.prompt_user("Please enter a tag")
+    clean_tag = utils.format_key(tag)
+    if tag != clean_tag:
+        if input.continue_anyways(f'You might have enter an invalid tag string. \'{tag}\' is ideally formatted \'{clean_tag}\''):
+            tags.append(tag)
+            log.info(f'Current tags: {tags}')
+        else:
+            log.info(f'Skipping tag \'{tag}\'')
+            log.info(f'Current tags: {tags}')
+    tags.append(tag)
+    log.info(f'Current tags: {tags}')
 
-    Starting from this authentication example, you can now build out your script and call other endpoints
-    The call to auth.handle_authenticate() above will authenticate the user and update the auth obj to hold all authentication information
-    When calling an endpoint you can use the following data
-
-    auth.base_url - the url the user was authenticated to (ex. https://example.plextrac.com)
-    auth.get_auth_headers() - to get current Authorization headers (handles reauthenticating if expired)
-    auth.tenant_id - to get the tenant id the user was authenticated to (required by some endpoints)
-    """
-    log.info(f'Aauthenticated to {auth.base_url} on tenant {auth.tenant_id}')
-    log.info(f'Authentication headers: {auth.get_auth_headers()}')
+    input_tag_additional_tags(tags)
 
 
-    """
-    Built-in API Endpoints
+    # select which filtering mode to determine which clients to delete
+    mode = input.user_options("Would you like to delete clients in Mode 1 or Mode 2?", "Invalid option", ["1", "2"])
+    log.info(f'Selected Mode {mode}')
 
-    You can use the currently built-out API endpoints in the /api folder. This is a wrapper that contains the specific url of certain endpoints.
+
+    # reading clients from instance
+    log.info(f'Loading clients...')
+
+    clients = []
+    get_page_of_clients(0, clients=clients)
+    if len(clients) < 1:
+        log.critical(f'There are no clients in the instance. Exiting...')
+        exit()
+    log.debug(f'num of clients founds: {len(clients)}')
+
     
-    Use the import statement: from api import *
+    # filter list of clients to selected tags
+    if mode == "1":
+        filtered_clients = list(filter(filter_mode_1, clients))
+    elif mode == "2":
+        filtered_clients = list(filter(filter_mode_2, clients))
     
-    You can now make a request by calling api.<object>.<endpoint>() and adding the necessary parameters
-    ex: response = api.client.get(auth.base_url, auth.get_auth_headers(), client_id)
-    """
-
-
-    """
-    Logging Wrapper
-
-    Any logging can be done using a custom wrapper for the Python logging module. This wrapper handles color formatting of logs to the console and optional output file.
+    log.info(f'Loaded {len(clients)} client(s) from Plextrac')
+    if mode == "1":
+        log.info(f'Found {len(filtered_clients)} client(s) that have at least 1 of the tags {tags}')
+    elif mode == "2":
+        log.info(f'Found {len(filtered_clients)} client(s) that each have all the tags {tags}')
     
-    Use the import statement, then set the reference to the custom logging wrapper:
-    import utils.log_handler as logger
-    log = logger.log
+    if input.continue_anyways(f'Would you like to delete these clients from your Plextrac instance'):
+        total = len(filtered_clients)
+        time_start = time.time()
+        for index, client in enumerate(filtered_clients):
+            log.info(f'[{index+1}/{total}] Deleteing client \'{client["name"]}\'...')
+            response = api._v1.clients.delete_client(auth.base_url, auth.get_auth_headers(), client['client_id'])
+            if type(response) == dict and response.get('status') == "success":
+                log.success(f'Deleted client')
+            else:
+                log.exception(f'Could not delete client. Skipping...')
 
-    You can now write to logs with log.<message-type>(<message>)
-
-    Define the following logging setting in settings.py:
-    - console logging level
-    - output file logging level
-    - whether the script should save logs to a file
-    """
-    log.warning("You are warned")
-    log.info("Here is some info")
-    log.success("Congrats!")
-
-
-    """
-    Built-in User Input Handling
-
-    You can use a wrapper for the Python input() function by utilizing the input_utils.py. This will add a prefix to all user prompts and
-    define some validation rules as to the user input.
-
-    Use the import statement: import utils.input_utils as input
-    
-    You can now use the following wrapper options:
-    - user_options
-    - user_list
-    - retry
-    - continue_anyways
-    - load_json_data
-    - load_csv_data
-
-    All options will continue to prompt the user until a valid input has been entered or selected, or exit the script.
-    """
-    # user_options
-    val = input.user_options("Select an option", "That wasn't a valid optoin", ["1", "2", "3"])
-    log.info(f'Selected {val}')
-
-    # user_list
-    option_list = ["apple", "banana", "pear"]
-    for index, option in enumerate(option_list):
-        log.info(f'{index} - {option}')
-    val = input.user_list("Select an option", "That wasn't a valid optoin", len(option_list))
-    log.info(f'Selected {val}')
-
-    # continue_anyways
-    val = input.continue_anyways("You ran into an example problem")
-    log.info(f'Selected {val}')
+            if index > 3:
+                total_time = time.time() - time_start
+                avg_delete_time = total_time/(index+1)
+                time_remaining = avg_delete_time * (total - (index+1))
+                log.debug(f'Elasped time: {round(total_time/60, 1)} minutes - Est. Time Remaining: {round(time_remaining/60, 1)} minutes')

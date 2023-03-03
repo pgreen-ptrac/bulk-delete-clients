@@ -2,7 +2,7 @@ import logging
 
 
 # logging
-console_log_level = logging.INFO
+console_log_level = logging.DEBUG
 file_log_level = logging.INFO
 save_logs_to_file = False
 
