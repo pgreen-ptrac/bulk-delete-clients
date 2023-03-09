@@ -1,10 +1,10 @@
 # bulk-delete-clients
 API script to prompt the user for a list of tags then search an instance of PT and delete clients with corresponding tags. Clients can be selected for deletion based on 2 filter modes.
 
-Mode 1: Delete all clients that contain at least one of the selected tags
-Mode 2: Delete all clients that contain all of the selected tags
+* Mode 1: Delete all clients that contain at least one of the selected tags
+* Mode 2: Delete all clients that contain all of the selected tags
 
-IMPORTANT: Deleting clients is a very resource heavy operation. Each delete operation takes ~20 seconds. Multiple delete operations in succession will increase this time and increase latency for all user actions in the platform. If this continues the time it takes to delete a client will surpass the request timeout threshold and the delete client operation will fail.
+**IMPORTANT**: Deleting clients is a very resource heavy operation. Each delete operation takes ~20 seconds. Multiple delete operations in succession will increase this time and increase latency for all user actions in the platform. If this continues the time it takes to delete a client will surpass the request timeout threshold and the delete client operation will fail.
 
 # Requirements
 - [Python 3+](https://www.python.org/downloads/)
