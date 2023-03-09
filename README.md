@@ -1,5 +1,10 @@
-# api-script-authenticate
-Example script to run through prompting a user for their login info and authenticating the user into an instance of Plextrac.
+# bulk-delete-clients
+API script to prompt the user for a list of tags then search an instance of PT and delete clients with corresponding tags. Clients can be selected for deletion based on 2 filter modes.
+
+Mode 1: Delete all clients that contain at least one of the selected tags
+Mode 2: Delete all clients that contain all of the selected tags
+
+IMPORTANT: Deleting clients is a very resource heavy operation. Each delete operation takes ~20 seconds. Multiple delete operations in succession will increase this time and increase latency for all user actions in the platform. If this continues the time it takes to delete a client will surpass the request timeout threshold and the delete client operation will fail.
 
 # Requirements
 - [Python 3+](https://www.python.org/downloads/)
@@ -40,4 +45,6 @@ The following values can either be added to the `config.yaml` file or entered wh
 - Prompts user for Plextrac instance URL
   - Validate URL points to a running instance of Plextrac
 - Prompts user for username, password, and mfa (if applicable)
-- Calls authenticate endpoints and stores Authoirzation headers for future use
+- Prompts user for list of tags that will be used to filter clients for deletion
+- Prompts user which deletion mode should be used to select clients
+- Deletes selected clients
